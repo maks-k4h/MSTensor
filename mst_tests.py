@@ -1,4 +1,3 @@
-import numpy as np
 from MSTensor import *
 
 
@@ -130,13 +129,13 @@ def addition_test():
     except:
         ...
     else:
-        raise ArithmeticError('Tensors of improper dimensions were added!')
+        raise ArithmeticError('Tensors of inappropriate dimensions were added!')
     try:
         t1 + t3  # must fail since we cannot add tensors with such dims: (3,1) + (2,3)
     except:
         ...
     else:
-        raise ArithmeticError('Tensors of improper dimensions were added!')
+        raise ArithmeticError('Tensors of inappropriate dimensions were added!')
     try:
         t1 + t4  # must success since we  add tensors with such dims: (1,3) + (2,3)
     except:
@@ -148,6 +147,105 @@ def addition_test():
     t1 = Tensor(np.array([1, 2]), True)
     t2 = Tensor(np.array([1, 0]), True)
     a = t1 + t2
+    assert a.c_g_
+    try:
+        a.back_prop()
+    except:
+        ...
+    else:
+        raise NotImplementedError('Back Propagation from a tensor that is not a '
+                                  'scalar succeeded.')
+
+    print('Tensor Addition Tests Succeeded.')
+
+
+def subtraction_test():
+    """
+    Tensor Addition Test
+
+    Performing subtractions on tensors different forms, computing the
+    gradient of the operation with respect to terms, checking derived
+    attributes, conducting forbidden subtractions and checking if the
+    proper error is raised.
+    """
+
+    t1 = Tensor(np.array([2]))
+    t2 = Tensor(np.array([13]))
+    res = t1 + t2
+    assert res.value.size == 1
+    assert res.value == np.array([[15]])
+    assert not res.c_g_
+    assert not res.grad
+
+    a = Tensor(np.array([1]), True)
+    b = Tensor(np.array([1]), False)
+    assert (a + b).c_g_ and (b + a).c_g_
+    # we don't check for parents here as it depends on realization
+
+    t1 = Tensor(np.array([20]), True)
+    t2 = Tensor(np.array([13]), True)
+    res = t1 - t2
+    assert res.value.size == 1
+    assert res.value == np.array([[7]])
+    assert res.c_g_
+    assert not res.grad
+    assert len(res.parents_) == 2
+    res.back_prop()
+    assert t1.grad == np.array([[1]])
+    assert t2.grad == np.array([[-1]])
+
+    t1 = Tensor(np.array([3]), True)
+    t2 = Tensor(np.array([2]), True)
+    t3 = Tensor(np.array([1]), True)
+    res = t1 - t2 - t3
+    assert res.value[0][0] == 0
+    res.back_prop()
+    assert t1.grad[0][0] == 1
+    assert t2.grad[0][0] == -1
+    assert t3.grad[0][0] == -1
+
+    t1 = Tensor(np.array([[1, 2], [1, 3]]))
+    t2 = Tensor(np.array([[1, -1], [1, -1]]))
+    t3 = Tensor(np.array([1, -1]))  # must be interpreted as vector-column
+    t4 = Tensor(np.array([-1]))
+    a1 = t1 - t2
+    assert a1.value[0][0] == 0 and a1.value[0][1] == 3 and \
+           a1.value[1][0] == 0 and a1.value[1][1] == 4
+    a2 = a1 - t3
+    assert a2.value[0][0] == -1 and a2.value[0][1] == 2 and \
+           a2.value[1][0] == 1 and a2.value[1][1] == 5
+    a3 = a2 - t4
+    assert a3.value[0][0] == 0 and a3.value[0][1] == 3 and \
+           a3.value[1][0] == 2 and a3.value[1][1] == 6
+
+    # forbidden additions
+    t1 = Tensor(np.array([[1, 2, 3], [1, 3, 3]]))
+    t2 = Tensor(np.array([[1, -1], [1, -1]]))
+    t3 = Tensor(np.array([1, 2, 3]))
+    t4 = Tensor(np.array([[1, 2, 3]]))
+    try:
+        t1 - t2
+    except:
+        ...
+    else:
+        raise ArithmeticError('Subtraction on tensors of wrong dimensions was performed!')
+    try:
+        t1 - t3  # must fail since we cannot subtract tensors with dims: (3,1) and (2,3)
+    except:
+        ...
+    else:
+        raise ArithmeticError('Subtraction on tensors of wrong dimensions was performed!')
+    try:
+        t1 - t4  # must success since we subtract tensors with dims: (1,3) and (2,3)
+    except:
+        raise ArithmeticError('Tensors of right dimensions were not subtracted!')
+
+    # Since the gradient of an operation with result with more than one
+    # entry cannot be auto-computed directly, so we only tests if assertion
+    # exception raised on such a try.
+    t1 = Tensor(np.array([1, 2]), True)
+    t2 = Tensor(np.array([1, 0]), True)
+    a = t1 - t2
     assert a.c_g_
     try:
         a.back_prop()
@@ -229,13 +327,13 @@ def multiplication_test():
     except:
         ...
     else:
-        raise ArithmeticError('Tensors of improper dimensions were multiplied!')
+        raise ArithmeticError('Tensors of inappropriate dimensions were multiplied!')
     try:
         t1 + t3  # must fail since we cannot multiply tensors with dims (3,1) and (2,3)
     except:
         ...
     else:
-        raise ArithmeticError('Tensors of improper dimensions were multiplied!')
+        raise ArithmeticError('Tensors of inappropriate dimensions were multiplied!')
     try:
         t1 + t4  # must success since we multiply tensors with dims (1,3) and (2,3)
     except:
@@ -257,6 +355,90 @@ def multiplication_test():
                                   'scalar succeeded.')
 
     print('Tensor Multiplication Tests Succeeded.')
+
+
+def truediv_test():
+    """
+    Tensor Division (truediv) Test
+
+    The test includes dividing tensors by tensors representing scalars,
+    vectors and matrices, division of matrices over vectors and scalars,
+    vector over scalars, etc. Handling of tries of division of tensors with
+    inappropriate dimensions is also checked.
+    """
+
+    t1 = Tensor(np.array([2]), True)
+    t2 = Tensor(np.array([5]), False)
+    assert (t1 / t2).c_g_ and (t2 / t1).c_g_
+    t2.c_g_ = True
+    a = t1 / t2
+    a.back_prop()
+    assert a.value.shape == (1, 1) and a.value[0][0] == 2 / 5
+    assert t1.grad.shape == (1, 1) and t1.grad[0][0] == 1 / 5
+    assert t2.grad.shape == (1, 1) and t2.grad[0][0] == - 2 / 25
+
+    # vector over scalar
+    t1 = Tensor(np.array([3, 7, 2]), True)
+    t2 = Tensor(np.array([2]), True)
+    a = (t1 / t2).sum()
+    a.back_prop()
+    assert t1.grad.shape == (3, 1)
+    assert t1.grad[0][0] == t1.grad[1][0] == t1.grad[2][0] == 1/2
+    assert t2.grad.shape == (1, 1)
+    assert t2.grad[0][0] == -3/4 -7/4 -2/4
+
+    # scalar over vector (numpy allows, we too)
+    t1 = Tensor(np.array([3, 7, 2]), True)
+    t2 = Tensor(np.array([2]), True)
+    a = (t2 / t1).sum()
+    a.back_prop()
+    assert t1.grad.shape == (3, 1)
+    assert t1.grad[0][0] == -2 / 3**2
+    assert t1.grad[1][0] == -2 / 7**2
+    assert t1.grad[2][0] == -2 / 2**2
+    assert t2.grad.shape == (1, 1)
+    assert t2.grad[0][0] == 1/3 + 1/7 + 1/2
+
+    # matrix over vector
+    t1 = Tensor(np.array([[1, 7], [3, 5]]), True)
+    t2 = Tensor(np.array([9, 2]), True)
+    a = (t1 / t2).sum()
+    a.back_prop()
+    assert a.value[0][0] == 1/9 + 7/9 + 3/2 + 5/2
+    assert t1.grad.shape == (2, 2)
+    assert t1.grad[0][0] == t1.grad[0][1] == 1/9
+    assert t1.grad[1][0] == t1.grad[1][1] == 1/2
+    assert t2.grad.shape == (2, 1)
+    assert t2.grad[0][0] == -(1 + 7)/9**2
+    assert t2.grad[1][0] == -(3 + 5)/2**2
+
+    # matrix over matrix
+    t1 = Tensor(np.array([[2, 3], [4, 5]]), True)
+    t2 = Tensor(np.array([[9, 2], [8, 7]]), True)
+    a = (t1 / t2).sum()
+    a.back_prop()
+    assert t1.grad.shape == t2.grad.shape == (2, 2)
+    assert t1.grad[0][0] == 1/9
+    assert t1.grad[0][1] == 1/2
+    assert t1.grad[1][0] == 1/8
+    assert t1.grad[1][1] == 1/7
+    assert t2.grad[0][0] == -2/9**2
+    assert t2.grad[0][1] == -3/2**2
+    assert t2.grad[1][0] == -4/8**2
+    assert t2.grad[1][1] == -5/7**2
+
+    # inappropriate dimensions
+    t1 = Tensor(np.array([[2, 3, 5], [4, 5, 9]]), True)
+    t2 = Tensor(np.array([[9, 2], [8, 7]]), True)
+    try:
+        t1 / t2
+    except:
+        ...
+    else:
+        raise ArithmeticError('Division (truediv) of tensors with inappropriate dimensions'
+                              ' succeeded.')
+
+    print('Tensor Division (truediv) Tests Succeeded.')
 
 
 def matmul_test():
@@ -327,7 +509,7 @@ def matmul_test():
     except:
         ...
     else:
-        raise ArithmeticError('The dot product of matrices of improper dimensions'
+        raise ArithmeticError('The dot product of matrices of inappropriate dimensions'
                               ' was computed.')
 
     # matmul to compute dot product between vectors and the gradient
@@ -358,6 +540,72 @@ def matmul_test():
             assert a.value[i][j] == t[i][j]
 
     print('Tensor Matrix Multiplication Tests Succeeded.')
+
+
+def pow_test():
+    """
+    Tensor Power Tests
+
+    Test raising tensors of different forms to different powers, including
+    special cases of power 0 and negative power of tensors with 0 entries.
+    We also check if attributes are passed to children and take the
+    derivative of the operation.
+    """
+
+    t = Tensor(np.array([5]))
+    a = t ** 2
+    assert not a.c_g_
+    assert a.value[0][0] == 25
+
+    t = Tensor(np.array([5]), True)
+    a = t ** 2
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 25
+    assert t.grad == 10
+
+    t = Tensor(np.array([5]), True)
+    a = t ** 1
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 5
+    assert t.grad == 1
+
+    t = Tensor(np.array([5], dtype=float), True)
+    a = t ** 0
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 1
+    assert t.grad == 0
+
+    t = Tensor(np.array([5], dtype=float), True)
+    a = t ** -1
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 1/5
+    assert t.grad == -1/25
+
+    t = Tensor(np.array([0], dtype=float))
+    a = t ** 0
+    assert not a.c_g_
+    assert a.value[0][0] == 1
+
+    t = Tensor(np.array([5, 5], dtype=float), True)
+    a = (t ** -1).sum()
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 2/5
+    assert t.grad[0][0] == t.grad[1][0] == -1/25
+
+    t = Tensor(np.array([[2, 2], [2, 2]], dtype=float), True)
+    a = ((t ** 2).sum()) ** -1
+    a.back_prop()
+    assert a.c_g_
+    assert a.value[0][0] == 1 / (4 * 4)
+    assert t.grad[0][0] == t.grad[0][1] == t.grad[1][0] == t.grad[1][1] == -1/64
+
+    print('Tensor Power Tests Succeeded.')
+
 
 
 def sum_test():
@@ -462,7 +710,10 @@ def chain_rule_test():
 
 initialization_test()
 addition_test()
+subtraction_test()
 multiplication_test()
+truediv_test()
 matmul_test()
+pow_test()
 sum_test()
 chain_rule_test()
