@@ -58,12 +58,13 @@ class Tensor:
             clean_grads(self)
             self.grad = np.ones_like(self.value)
 
-        # composes Jacobian and gradient
+        # composes Jacobians and gradients
         def compose(jac: np.ndarray, grad: np.ndarray):
-            for i in range(jac.shape[0]):
-                for j in range(jac.shape[1]):
-                    jac[i][j] *= grad[i][j]
-            return jac.sum(axis=0).sum(axis=0)
+            res = jac.copy()
+            for i in range(res.shape[0]):
+                for j in range(res.shape[1]):
+                    res[i][j] *= grad[i][j]
+            return res.sum(axis=0).sum(axis=0)
 
         for parent in self.parents_:
             if parent[0] and parent[0].c_g_:
@@ -137,6 +138,16 @@ class Tensor:
                     g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = other.value[i % g2.shape[2]][j % g2.shape[3]]
                     g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = self.value[i % g1.shape[2]][j % g1.shape[3]]
             n_t.parents_ = ((self, g1), (other, g2))
+        return n_t
+
+    def __neg__(self):
+        n_t = Tensor(-self.value, compute_g=self.c_g_)
+        if n_t.c_g_:
+            g = np.zeros(shape=n_t.value.shape + self.value.shape)
+            for i in range(n_t.value.shape[0]):
+                for j in range(n_t.value.shape[1]):
+                    g[i][j][i][j] = -1
+            n_t.parents_ = ((self, g),)
         return n_t
 
     def __truediv__(self, other):
