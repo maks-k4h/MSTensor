@@ -1,4 +1,5 @@
 import numpy as np
+import math
 
 
 class Tensor:
@@ -99,14 +100,18 @@ class Tensor:
             n_t.parents_ = ((self, g1), (other, g2))
         return n_t
 
-    def __pow__(self, power):
-        n_t = Tensor(self.value ** power, compute_g=self.c_g_)
+    def __pow__(self, other):
+        n_t = Tensor(self.value ** other.value, compute_g=self.c_g_ or other.c_g_)
         if n_t.c_g_:
-            g = np.zeros(shape=n_t.value.shape + self.value.shape)
+            g1 = np.zeros(shape=n_t.value.shape + self.value.shape)
+            g2 = np.zeros(shape=n_t.value.shape + other.value.shape)
             for i in range(n_t.value.shape[0]):
                 for j in range(n_t.value.shape[1]):
-                    g[i][j][i][j] += power * self.value[i][j] ** (power - 1)
-            n_t.parents_ = ((self, g),)
+                    a = self.value[i % g1.shape[2]][j % g1.shape[3]]
+                    b = other.value[i % g2.shape[2]][j % g2.shape[3]]
+                    g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = b * a ** (b - 1)
+                    g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = a ** b * math.log(a)
+            n_t.parents_ = ((self, g1), (other, g2))
         return n_t
 
     def __matmul__(self, other):
@@ -141,9 +146,10 @@ class Tensor:
             g2 = np.zeros(shape=n_t.value.shape + other.value.shape)
             for i in range(n_t.value.shape[0]):
                 for j in range(n_t.value.shape[1]):
-                    g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = 1 / other.value[i % g2.shape[2]][j % g2.shape[3]]
-                    g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = -self.value[i % g1.shape[2]][j % g1.shape[3]] / \
-                                                                 other.value[i % g2.shape[2]][j % g2.shape[3]] ** 2
+                    a = self.value[i % g1.shape[2]][j % g1.shape[3]]
+                    b = other.value[i % g2.shape[2]][j % g2.shape[3]]
+                    g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = 1 / b
+                    g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = -a / b**2
             n_t.parents_ = ((self, g1), (other, g2))
         return n_t
 
@@ -152,3 +158,56 @@ class Tensor:
         if n_t.c_g_:
             n_t.parents_ = ((self, np.ones((1, 1) + self.value.shape)),)
         return n_t
+
+
+def log(tensor: Tensor) -> Tensor:
+    n_t = Tensor(np.log(tensor.value), compute_g=tensor.c_g_)
+    if n_t.c_g_:
+        g = np.zeros(shape=n_t.value.shape + tensor.value.shape)
+        for i in range(n_t.value.shape[0]):
+            for j in range(n_t.value.shape[1]):
+                g[i][j][i][j] = 1 / tensor.value[i][j]
+        n_t.parents_ = ((tensor, g),)
+    return n_t
+
+
+def exp(tensor: Tensor) -> Tensor:
+    n_t = Tensor(np.exp(tensor.value), compute_g=tensor.c_g_)
+    if n_t.c_g_:
+        g = np.zeros(shape=n_t.value.shape + tensor.value.shape)
+        for i in range(n_t.value.shape[0]):
+            for j in range(n_t.value.shape[1]):
+                g[i][j][i][j] = n_t.value[i][j]
+        n_t.parents_ = ((tensor, g),)
+    return n_t
+
+
+def sigmoid(tensor: Tensor) -> Tensor:
+
+    def sigmoid_(arr: np.ndarray):
+        return 1 / (1 + np.exp(-arr))
+
+    n_t = Tensor(sigmoid_(tensor.value), compute_g=tensor.c_g_)
+    if n_t.c_g_:
+        g = np.zeros(shape=n_t.value.shape + tensor.value.shape)
+        for i in range(n_t.value.shape[0]):
+            for j in range(n_t.value.shape[1]):
+                g[i][j][i][j] = n_t.value[i][j] * (1 - n_t.value[i][j])
+        n_t.parents_ = ((tensor, g),)
+    return n_t
+
+
+def ReLU(tensor: Tensor) -> Tensor:
+
+    def relu(arr: np.ndarray):
+        return np.maximum(arr, 0)
+
+    n_t = Tensor(relu(tensor.value), compute_g=tensor.c_g_)
+    if n_t.c_g_:
+        g = np.zeros(shape=n_t.value.shape + tensor.value.shape)
+        for i in range(n_t.value.shape[0]):
+            for j in range(n_t.value.shape[1]):
+                if tensor.value[i][j] > 0:
+                    g[i][j][i][j] = 1
+        n_t.parents_ = ((tensor, g),)
+    return n_t

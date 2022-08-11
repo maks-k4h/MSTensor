@@ -1,4 +1,5 @@
 from MSTensor import *
+import math
 
 
 def initialization_test():
@@ -552,57 +553,87 @@ def pow_test():
     derivative of the operation.
     """
 
-    t = Tensor(np.array([5]))
-    a = t ** 2
-    assert not a.c_g_
-    assert a.value[0][0] == 25
+    # one-dimensional tensors
+    a = Tensor(np.array([5]))
+    b = Tensor(np.array([2]))
+    r = a ** b
+    assert not r.c_g_
+    assert r.value[0][0] == 25
 
-    t = Tensor(np.array([5]), True)
-    a = t ** 2
-    a.back_prop()
+    a = Tensor(np.array([5]), True)
+    b = Tensor(np.array([2]), True)
+    r = a ** b
+    r.back_prop()
     assert a.c_g_
-    assert a.value[0][0] == 25
-    assert t.grad == 10
+    assert r.value[0][0] == 25
+    assert a.grad == 10
+    assert b.grad == 5**2 * math.log(5)
 
-    t = Tensor(np.array([5]), True)
-    a = t ** 1
-    a.back_prop()
-    assert a.c_g_
-    assert a.value[0][0] == 5
-    assert t.grad == 1
+    a = Tensor(np.array([5]), True)
+    b = Tensor(np.ones(1), True)
+    r = a ** b
+    r.back_prop()
+    assert r.c_g_
+    assert r.value[0][0] == 5
+    assert a.grad == 1
+    assert b.grad == 5 * math.log(5)
 
-    t = Tensor(np.array([5], dtype=float), True)
-    a = t ** 0
-    a.back_prop()
-    assert a.c_g_
-    assert a.value[0][0] == 1
-    assert t.grad == 0
+    a = Tensor(np.array([5.]), True)
+    b = Tensor(np.array([0.]), True)
+    r = a ** b
+    r.back_prop()
+    assert r.c_g_
+    assert r.value[0][0] == 1
+    assert a.grad == 0
+    assert b.grad == math.log(5)
 
-    t = Tensor(np.array([5], dtype=float), True)
-    a = t ** -1
-    a.back_prop()
-    assert a.c_g_
-    assert a.value[0][0] == 1/5
-    assert t.grad == -1/25
+    a = Tensor(np.array([5.]), True)
+    b = Tensor(np.array([-1.]), True)
+    r = a ** b
+    r.back_prop()
+    assert r.c_g_
+    assert r.value[0][0] == 1/5
+    assert a.grad == -1/25
+    assert b.grad - math.log(5) / 5 < 1e-6
 
-    t = Tensor(np.array([0], dtype=float))
-    a = t ** 0
-    assert not a.c_g_
-    assert a.value[0][0] == 1
+    # higher-dimensional tensors
 
-    t = Tensor(np.array([5, 5], dtype=float), True)
-    a = (t ** -1).sum()
-    a.back_prop()
-    assert a.c_g_
-    assert a.value[0][0] == 2/5
-    assert t.grad[0][0] == t.grad[1][0] == -1/25
+    a = Tensor(np.array([5., 5.]), True)
+    b = Tensor(np.array([-1.]), True)
+    r = (a ** b).sum()
+    r.back_prop()
+    assert r.c_g_
+    assert r.value[0][0] == 2/5
+    assert a.grad.shape == (2, 1)
+    assert a.grad[0][0] == a.grad[1][0] == -1/25
+    assert b.grad.shape == (1, 1)
+    assert b.grad[0][0] - 2 * math.log(5) / 5 < 1e-6
 
-    t = Tensor(np.array([[2, 2], [2, 2]], dtype=float), True)
-    a = ((t ** 2).sum()) ** -1
-    a.back_prop()
-    assert a.c_g_
-    assert a.value[0][0] == 1 / (4 * 4)
-    assert t.grad[0][0] == t.grad[0][1] == t.grad[1][0] == t.grad[1][1] == -1/64
+    a = Tensor(np.array([5.]), True)
+    b = Tensor(np.array([-1., -1.]), True)
+    r = (a ** b).sum()
+    r.back_prop()
+    assert r.value[0][0] == 2 / 5
+    assert a.grad.shape == (1, 1)
+    assert a.grad[0][0] == - 2 / 5 ** 2
+    assert b.grad.shape == (2, 1)
+    assert b.grad[0][0] - 2 * math.log(5) / 5 < 1e-6
+    assert b.grad[1][0] - 2 * math.log(5) / 5 < 1e-6
+
+    a = Tensor(np.array([[1., 2.], [3., 4.]]), True)
+    b = Tensor(np.array([2, 4]), True)
+    r = (a ** b).sum()
+    r.back_prop()
+    assert r.value == 1**2 + 2**2 + 3**4 + 4**4
+    assert a.grad.shape == (2, 2)
+    assert b.grad.shape == (2, 1)
+    assert a.grad[0][0] == 2 * 1**1
+    assert a.grad[0][1] == 2 * 2**1
+    assert a.grad[1][0] == 4 * 3**3
+    assert a.grad[1][1] == 4 * 4**3
+    assert b.grad[0][0] - (1**2 * math.log(1) + 2**2 * math.log(2)) < 1e-6
+    assert b.grad[1][0] - (3**4 * math.log(3) + 4**4 * math.log(4)) < 1e-6
+
 
     print('Tensor Power Tests Succeeded.')
 
@@ -708,6 +739,161 @@ def chain_rule_test():
     print('Tensor Chain Rule Test Succeeded')
 
 
+def log_test():
+    """
+    Tensor Log Function Test
+    """
+
+    a = Tensor(np.array([5]))
+    r = log(a)
+    assert a.value.shape == r.value.shape == (1, 1)
+    assert r.value - math.log(5) < 1e-6
+    assert not r.c_g_
+
+    a = Tensor(np.array([5]), True)
+    r = log(a)
+    r.back_prop()
+    assert a.grad.shape == (1, 1)
+    assert r.value - math.log(5) < 1e-6
+    assert r.c_g_
+    assert a.grad[0][0] == 1/5
+
+    a = Tensor(np.array([5, 9]), True)
+    r = log(a).sum()
+    r.back_prop()
+    assert r.value - math.log(45) < 1e-6
+    assert a.grad.shape == (2, 1)
+    assert a.grad[0][0] == 1/5 and a.grad[1][0] == 1/9
+
+    a = Tensor(np.array([[2, 3], [4, 5]]), True)
+    r = log(a).sum()
+    r.back_prop()
+    assert r.value - math.log(2*3*4*5) < 1e-6
+    assert a.grad.shape == (2, 2)
+    assert a.grad[0][0] == 1 / 2
+    assert a.grad[0][1] == 1 / 3
+    assert a.grad[1][0] == 1 / 4
+    assert a.grad[1][1] == 1 / 5
+
+    print('Tensor Log Function Tests Succeeded')
+
+
+def exp_test():
+    """
+    Tensor Exp Function Test
+    """
+
+    a = Tensor(np.array([5]))
+    r = exp(a)
+    assert a.value.shape == r.value.shape == (1, 1)
+    assert r.value - math.exp(5) < 1e-6
+    assert not r.c_g_
+
+    a = Tensor(np.array([5]), True)
+    r = exp(a)
+    r.back_prop()
+    assert a.grad.shape == (1, 1)
+    assert r.value - math.exp(5) < 1e-6
+    assert r.c_g_
+    assert a.grad[0][0] == math.exp(5)
+
+    a = Tensor(np.array([5, 9]), True)
+    r = exp(a).sum()
+    r.back_prop()
+    assert r.value - math.exp(5) - math.exp(9) < 1e-6
+    assert a.grad.shape == (2, 1)
+    assert a.grad[0][0] == math.exp(5)
+    assert a.grad[1][0] == math.exp(9)
+
+    a = Tensor(np.array([[2, 3], [4, 5]]), True)
+    r = exp(a).sum()
+    r.back_prop()
+    assert r.value - math.exp(2) - math.exp(3) - math.exp(4) - math.exp(5) < 1e-6
+    assert a.grad.shape == (2, 2)
+    assert a.grad[0][0] == math.exp(2)
+    assert a.grad[0][1] == math.exp(3)
+    assert a.grad[1][0] == math.exp(4)
+    assert a.grad[1][1] == math.exp(5)
+
+    print('Tensor Exp Function Tests Succeeded')
+
+
+def sigmoid_test():
+    """
+    Tensor Sigmoid Function Test
+    """
+
+    s = lambda x: 1 / (1 + math.exp(-x))
+
+    a = Tensor(np.array([5]))
+    r = sigmoid(a)
+    assert a.value.shape == r.value.shape == (1, 1)
+    assert r.value - s(5) < 1e-6
+    assert not r.c_g_
+
+    a = Tensor(np.array([5]), True)
+    r = sigmoid(a)
+    r.back_prop()
+    assert a.grad.shape == (1, 1)
+    assert r.value - s(5) < 1e-6
+    assert r.c_g_
+    assert a.grad[0][0] - s(5)*(1-s(5)) < 1e-6
+
+    a = Tensor(np.array([5, 9]), True)
+    r = sigmoid(a).sum()
+    r.back_prop()
+    assert r.value - s(5) - s(9) < 1e-6
+    assert a.grad.shape == (2, 1)
+    assert a.grad[0][0] == s(5)*(1-s(5))
+    assert a.grad[1][0] == s(9)*(1-s(9))
+
+    a = Tensor(np.array([[2, 3], [4, 5]]), True)
+    r = sigmoid(a).sum()
+    r.back_prop()
+    assert r.value - s(2) - s(3) - s(4) - s(5) < 1e-6
+    assert a.grad.shape == (2, 2)
+    assert a.grad[0][0] == s(2)*(1-s(2))
+    assert a.grad[0][1] == s(3)*(1-s(3))
+    assert a.grad[1][0] == s(4)*(1-s(4))
+    assert a.grad[1][1] == s(5)*(1-s(5))
+
+    print('Tensor Sigmoid Function Tests Succeeded')
+
+
+def ReLU_test():
+    """
+    Tensor ReLU Function Test
+    """
+
+    a = Tensor(np.array([5]))
+    b = Tensor(np.array([-5]))
+    r = ReLU(a) + ReLU(b)
+    assert r.value.shape == (1, 1)
+    assert r.value == 5
+    assert not r.c_g_
+
+    a = Tensor(np.array([-5, 9]), True)
+    r = ReLU(a).sum()
+    r.back_prop()
+    assert r.value == 9
+    assert a.grad.shape == (2, 1)
+    assert a.grad[0][0] == 0
+    assert a.grad[1][0] == 1
+
+    a = Tensor(np.array([[-2, 3], [4, -5]]), True)
+    r = ReLU(a).sum()
+    r.back_prop()
+    assert r.value == 7
+    assert a.grad.shape == (2, 2)
+    assert a.grad[0][0] == 0
+    assert a.grad[0][1] == 1
+    assert a.grad[1][0] == 1
+    assert a.grad[1][1] == 0
+
+    print('Tensor ReLU Function Tests Succeeded')
+
+
+# Tensor methods
 initialization_test()
 addition_test()
 subtraction_test()
@@ -717,3 +903,9 @@ matmul_test()
 pow_test()
 sum_test()
 chain_rule_test()
+
+# Helper methods
+log_test()
+exp_test()
+sigmoid_test()
+ReLU_test()
