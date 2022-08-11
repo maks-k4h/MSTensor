@@ -7,7 +7,7 @@ from MSTensor import *
 # ====================================
 
 
-# We'll learn simple binary function using MLP
+# We'll learn a simple binary function using MLP
 def f(x):
     return x[0] | x[1]
 
@@ -35,7 +35,7 @@ random.shuffle(data)
 
 labels = [f(x) for x in data]
 
-# training data is not enough to certainly state the
+# Training data is not enough to certainly state the
 # function's closed form, since to do so we need all
 # 2^4 = 16 examples. We divide data 75/25
 # training/testing respectively
@@ -51,16 +51,16 @@ labels_train, labels_test = labels[:12], labels[12:]
 # E — loss function — cross-entropy, since maximum likelihood estimation
 #     is more convenient here.
 
-# I — not really a layer, it will be given by matrix X of input labels
+# I — not really a layer, it will be given by a matrix X of input labels
 # L(X, W1, B1) = ReLU(X @ W1 + B1)
 # O(L, W2, B2) = sigmoid(L @ W2 + B2)
 # E(O, Y) = -sum(Y*log(O) + (1-Y)*log(1-O)) / n, where
 #   Y is a matrix of labels,
-#   E is just mean cross entropy -(y*log(o) + (1-y)*log(1-o)),
+#   E is just a mean cross entropy -(y*log(o) + (1-y)*log(1-o)),
 #   n is the number of input examples.
 
 # let us introduce one hyperparameter of the model:
-J = 4  # the numer of neurons in first (and last) hidden layer
+J = 4  # the numer of neurons in the first (and the last) hidden layer
 
 # model initialization
 W1 = Tensor(np.random.rand(4, J), True)
