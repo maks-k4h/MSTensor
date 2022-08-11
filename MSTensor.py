@@ -35,10 +35,26 @@ class Tensor:
         return str(self.value)
 
     def back_prop(self):
+        """
+        Automatically conducts back-propagation of gradient through all parent nodes
+        that need a gradient (compute_g was set to True when initializing ~ c_g_ == True).
+        Before doing so sets gradients of all parent nodes with c_g_ == True to None.
+
+        """
+
         if not self.c_g_:
             return
         if self.grad is None:  # check if it's a leaf (back_prop was initially called on it)
             assert self.value.size == 1  # leaf must be a scalar
+
+            # cleaning previous gradients
+            def clean_grads(t: Tensor):
+                if t.c_g_:
+                    t.grad = None
+                    for parent in t.parents_:
+                        clean_grads(parent[0])
+
+            clean_grads(self)
             self.grad = np.ones_like(self.value)
 
         # composes Jacobian and gradient
@@ -50,7 +66,7 @@ class Tensor:
 
         for parent in self.parents_:
             if parent[0] and parent[0].c_g_:
-                if not parent[0].grad:
+                if parent[0].grad is None:
                     parent[0].grad = np.zeros_like(parent[0].value, dtype=float)
 
                 # debugging purposes
