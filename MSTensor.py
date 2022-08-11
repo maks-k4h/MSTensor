@@ -104,15 +104,20 @@ class Tensor:
     def __pow__(self, other):
         n_t = Tensor(self.value ** other.value, compute_g=self.c_g_ or other.c_g_)
         if n_t.c_g_:
-            g1 = np.zeros(shape=n_t.value.shape + self.value.shape)
-            g2 = np.zeros(shape=n_t.value.shape + other.value.shape)
+            if self.c_g_:
+                g1 = np.zeros(shape=n_t.value.shape + self.value.shape)
+                n_t.parents_ += ((self, g1),)
+            if other.c_g_:
+                g2 = np.zeros(shape=n_t.value.shape + other.value.shape)
+                n_t.parents_ += ((other, g2),)
             for i in range(n_t.value.shape[0]):
                 for j in range(n_t.value.shape[1]):
-                    a = self.value[i % g1.shape[2]][j % g1.shape[3]]
-                    b = other.value[i % g2.shape[2]][j % g2.shape[3]]
-                    g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = b * a ** (b - 1)
-                    g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = a ** b * math.log(a)
-            n_t.parents_ = ((self, g1), (other, g2))
+                    a = self.value[i % self.value.shape[0]][j % self.value.shape[1]]
+                    b = other.value[i % other.value.shape[0]][j % other.value.shape[1]]
+                    if self.c_g_:
+                        g1[i][j][i % g1.shape[2]][j % g1.shape[3]] = b * a ** (b - 1)
+                    if other.c_g_:
+                        g2[i][j][i % g2.shape[2]][j % g2.shape[3]] = a ** b * math.log(a)
         return n_t
 
     def __matmul__(self, other):

@@ -19,19 +19,20 @@ Y = Tensor(np.array([
     [18]
 ]))
 
+two = Tensor(np.array([2]))
 
 def mse(x: Tensor, y: Tensor, w: Tensor, b: Tensor):
     A = x @ w
     P = A + b
-    return ((P - y) ** 2).sum() / Tensor(np.array(x.value.shape[0]))
+    return ((P - y) ** two).sum() / Tensor(np.array(x.value.shape[0]))
 
 
-W, B = Tensor(np.random.rand(2),True), Tensor(np.random.rand(1), True)
+W, B = Tensor(np.random.rand(2), True), Tensor(np.random.rand(1), True)
 
 print('Initial MSE: {}'.format(mse(X, Y, W, B)))
 
 for i in range(500):
-    e = ((X @ W + B - Y) ** 2).sum() / Tensor(np.array(X.value.shape[0]))
+    e = ((X @ W + B - Y) ** two).sum() / Tensor(np.array(X.value.shape[0]))
     e.back_prop()
     W.value -= W.grad * 0.05
     B.value -= B.grad * 0.05
