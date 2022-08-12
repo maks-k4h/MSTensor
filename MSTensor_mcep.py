@@ -1,6 +1,7 @@
 import numpy as np
 import math
 
+
 # ========================================================
 # MSTensor mcep (more computationally efficient prototype)
 # was created since the original version is too slow.
@@ -45,7 +46,7 @@ def leaf_accumulator(tensor, grad):
         if tensor.grad is None:
             tensor.grad = grad  # initializing new gradient
         else:
-            tensor.grad += grad     # cumulating the gradient
+            tensor.grad += grad  # cumulating the gradient
 
 
 def add_propagate(tensor, grad):
@@ -53,20 +54,20 @@ def add_propagate(tensor, grad):
     for child in tensor.children_:
         """
         Notes:
-        
+
         In original version we computed Jacobian first and then (maybe not soon)
         composed it with passed gradient to get the influence of each entry
         in this particular tensor on the final value, that is a scalar.
-        
+
         Here we pass the first step (i.e. Jacobian computation) and perform 
         composition in place (i.e. compute needed entries of Jacobian in place).
-        
+
         Odd indexes you see in the following loop are motivated by flexibility
         of numpy's ndarray binary operations.
         """
         composition = np.zeros_like(child.value, dtype=float)
-        for i in range(grad.shape[0]):
-            for j in range(grad.shape[1]):
+        for i in range(tensor.value.shape[0]):
+            for j in range(tensor.value.shape[1]):
                 composition[i % composition.shape[0]][j % composition.shape[1]] += 1 * grad[i][j]
         child.propagate_(child, composition)
 
@@ -133,14 +134,14 @@ def truediv_propagate(tensor, grad):
     if c2.c_g_:
         com_2 = np.zeros_like(c2.value, dtype=float)
 
-    for i in range(grad.shape[0]):
-        for j in range(grad.shape[1]):
+    for i in range(tensor.value.shape[0]):
+        for j in range(tensor.value.shape[1]):
             a = c1.value[i % c1.value.shape[0]][j % c1.value.shape[1]]
             b = c2.value[i % c2.value.shape[0]][j % c2.value.shape[1]]
             if c1.c_g_:
-                com_1[i % com_1.shape[0]][j % com_1.shape[1]] += grad[i][j] * 1 / b
+                com_1[i % com_1.shape[0]][j % com_1.shape[1]] += grad[i][j] / b
             if c2.c_g_:
-                com_2[i % com_2.shape[0]][j % com_2.shape[1]] += grad[i][j] * -a / b**2
+                com_2[i % com_2.shape[0]][j % com_2.shape[1]] += grad[i][j] * - a / b ** 2
 
     if c1.c_g_:
         c1.propagate_(c1, com_1)
@@ -213,7 +214,7 @@ class Tensor:
         self.c_g_ = compute_g
         self.is_leaf = True
         self.grad = None
-        self.propagate_ = leaf_accumulator # gradient back-propagator, gradient accumulator by default
+        self.propagate_ = leaf_accumulator  # gradient back-propagator, gradient accumulator by default
         self.children_ = ()
 
     def __str__(self):
@@ -261,7 +262,7 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = neg_propagate
-            n_t.children_ = (self, )
+            n_t.children_ = (self,)
         return n_t
 
     def __mul__(self, other):
@@ -340,6 +341,7 @@ def sigmoid_propagate(tensor, grad):
             com[i][j] = grad[i][j] * tensor.value[i][j] * (1 - tensor.value[i][j])
     tensor.children_[0].propagate_(tensor.children_[0], com)
 
+
 # =========================================
 # Functions
 
@@ -365,8 +367,9 @@ def ReLU(tensor: Tensor):
         n_t.children_ = (tensor,)
     return n_t
 
+
 def sigmoid(tensor: Tensor):
-    n_t = Tensor(1 / (1 + np.exp(tensor.value)), tensor.c_g_)
+    n_t = Tensor(1 / (1 + np.exp(-tensor.value)), tensor.c_g_)
     n_t.is_leaf = False
     if n_t.c_g_:
         n_t.propagate_ = sigmoid_propagate
