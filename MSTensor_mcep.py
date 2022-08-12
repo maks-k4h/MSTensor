@@ -9,8 +9,33 @@ import math
 
 # Propagators
 # ========================================================
-# Describe the idea of propagators and main principles
+# 'Describe the idea of propagators and main principles'
+#
+# Conventions on new function addition and their
+# propagators:
+#   — Every propagator is created for (only) one method
+#     or function. Function and propagator can own some
+#     specific conventions, though those cannot influence
+#     other propagators or functions. That is, function
+#     can attach to a tensor both children even though
+#     only one of them needs a gradient to be calculated.
+#     It can be due to the structure of derivative. For
+#     example, multiplication operation: the derivative
+#     of the first child depend on the second and vice
+#     versa.
+#   — Rely on functions. If you know, that the function
+#     will not pass you the children whose gradient must
+#     not be computed, don't check it twice.
+#   — Don't pass None children.
+#
 # ========================================================
+
+
+# ========================================================
+# Tensor class internal propagators
+# ========================================================
+
+# TODO: would you remove is_leaf?
 
 def leaf_accumulator(tensor, grad):
     """leaf_propagate"""
@@ -25,12 +50,7 @@ def leaf_accumulator(tensor, grad):
 
 def add_propagate(tensor, grad):
     """add_propagate"""
-    if not tensor.c_g_:
-        return
-
     for child in tensor.children_:
-        if child is None:
-            continue
         """
         Notes:
         
@@ -53,11 +73,8 @@ def add_propagate(tensor, grad):
 
 def sub_propagate(tensor, grad):
     """sub_propagate"""
-    if not tensor.c_g_:
-        return
-
     # first child
-    if tensor.children_[0] is not None:
+    if tensor.children_[0].c_g_:
         composition = np.zeros_like(tensor.children_[0].value, dtype=float)
         for i in range(grad.shape[0]):
             for j in range(grad.shape[1]):
@@ -65,7 +82,7 @@ def sub_propagate(tensor, grad):
         tensor.children_[0].propagate_(tensor.children_[0], composition)
 
     # second child
-    if tensor.children_[1] is not None:
+    if tensor.children_[1].c_g_:
         composition = np.zeros_like(tensor.children_[1].value, dtype=float)
         for i in range(grad.shape[0]):
             for j in range(grad.shape[1]):
@@ -75,25 +92,16 @@ def sub_propagate(tensor, grad):
 
 def sum_propagate(tensor, grad):
     """sum_propagate"""
-    if not tensor.c_g_:
-        return
-
     tensor.children_[0].propagate_(tensor.children_[0], np.ones_like(tensor.children_[0].value) * grad)
 
 
 def neg_propagate(tensor, grad):
     """neg_propagate"""
-    if not tensor.c_g_:
-        return
-
     tensor.children_[0].propagate_(tensor.children_[0], -1 * grad)
 
 
 def mul_propagate(tensor, grad):
     """mul_propagate"""
-    if not tensor.c_g_:
-        return
-
     c1 = tensor.children_[0]
     c2 = tensor.children_[1]
     if c1.c_g_:
@@ -118,9 +126,6 @@ def mul_propagate(tensor, grad):
 
 def truediv_propagate(tensor, grad):
     """truediv_propagate"""
-    if not tensor.c_g_:
-        return
-
     c1 = tensor.children_[0]
     c2 = tensor.children_[1]
     if c1.c_g_:
@@ -145,9 +150,6 @@ def truediv_propagate(tensor, grad):
 
 def matmul_propagate(tensor, grad):
     """matmul_propagate"""
-    if not tensor.c_g_:
-        return
-
     c1 = tensor.children_[0]
     c2 = tensor.children_[1]
     if c1.c_g_:
@@ -171,9 +173,6 @@ def matmul_propagate(tensor, grad):
 
 def pow_propagate(tensor, grad):
     """pow_propagate"""
-    if not tensor.c_g_:
-        return
-
     c1 = tensor.children_[0]
     c2 = tensor.children_[1]
     if c1.c_g_:
@@ -186,9 +185,9 @@ def pow_propagate(tensor, grad):
             a = c1.value[i % c1.value.shape[0]][j % c1.value.shape[1]]
             b = c2.value[i % c2.value.shape[0]][j % c2.value.shape[1]]
             if c1.c_g_:
-                com_1[i % com_1.shape[0]][j % com_1.shape[1]] += b * a ** (b - 1)
+                com_1[i % com_1.shape[0]][j % com_1.shape[1]] += grad[i][j] * b * a ** (b - 1)
             if c2.c_g_:
-                com_2[i % com_2.shape[0]][j % com_2.shape[1]] += a ** b * math.log(a)
+                com_2[i % com_2.shape[0]][j % com_2.shape[1]] += grad[i][j] * a ** b * math.log(a)
 
     if c1.c_g_:
         c1.propagate_(c1, com_1)
@@ -243,7 +242,10 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = add_propagate
-            n_t.children_ = (self if self.c_g_ else None, other if other.c_g_ else None)
+            if self.c_g_:
+                n_t.children_ += (self,)
+            if other.c_g_:
+                n_t.children_ += (other,)
         return n_t
 
     def __sub__(self, other):
@@ -251,7 +253,7 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = sub_propagate
-            n_t.children_ = (self if self.c_g_ else None, other if other.c_g_ else None)
+            n_t.children_ = (self, other)
         return n_t
 
     def __neg__(self):
@@ -276,7 +278,7 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = truediv_propagate
-            n_t.children_ = (self if self.c_g_ else None, other if other.c_g_ else None)
+            n_t.children_ = (self, other)
         return n_t
 
     def __matmul__(self, other):
@@ -284,7 +286,7 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = matmul_propagate
-            n_t.children_ = (self if self.c_g_ else None, other if other.c_g_ else None)
+            n_t.children_ = (self, other)
         return n_t
 
     def __pow__(self, other):
@@ -292,7 +294,7 @@ class Tensor:
         n_t.is_leaf = False
         if n_t.c_g_:
             n_t.propagate_ = pow_propagate
-            n_t.children_ = (self if self.c_g_ else None, other if other.c_g_ else None)
+            n_t.children_ = (self, other)
         return n_t
 
     def sum(self):
@@ -304,6 +306,70 @@ class Tensor:
         return n_t
 
 
+# =========================================
+# Main function to work with Tensors
+# =========================================
+
+# =========================================
+# Propagators for functions (where needed)
+
+def log_propagate(tensor, grad):
+    """log_propagate"""
+    com = np.zeros_like(tensor.value, dtype=float)
+    for i in range(grad.shape[0]):
+        for j in range(grad.shape[1]):
+            com[i][j] += grad[i][j] * 1 / tensor.children_[0].value[i][j]
+    tensor.children_[0].propagate_(tensor.children_[0], com)
 
 
+def ReLU_propagate(tensor, grad):
+    """ReLU_propagate"""
+    com = np.zeros_like(tensor.value, dtype=float)
+    for i in range(grad.shape[0]):
+        for j in range(grad.shape[1]):
+            if tensor.children_[0].value[i][j] > 0:
+                com[i][j] = grad[i][j]
+    tensor.children_[0].propagate_(tensor.children_[0], com)
+
+
+def sigmoid_propagate(tensor, grad):
+    """sigmoid_propagate"""
+    com = np.zeros_like(tensor.value, dtype=float)
+    for i in range(grad.shape[0]):
+        for j in range(grad.shape[1]):
+            com[i][j] = grad[i][j] * tensor.value[i][j] * (1 - tensor.value[i][j])
+    tensor.children_[0].propagate_(tensor.children_[0], com)
+
+# =========================================
+# Functions
+
+def log(tensor: Tensor):
+    """log_propagate"""
+    n_t = Tensor(np.log(tensor.value), tensor.c_g_)
+    n_t.is_leaf = False
+    if n_t.c_g_:
+        n_t.propagate_ = log_propagate
+        n_t.children_ = (tensor,)
+    return n_t
+
+
+def exp(tensor: Tensor):
+    return Tensor(np.array([math.e])) ** tensor
+
+
+def ReLU(tensor: Tensor):
+    n_t = Tensor(np.maximum(tensor.value, 0), tensor.c_g_)
+    n_t.is_leaf = False
+    if n_t.c_g_:
+        n_t.propagate_ = ReLU_propagate
+        n_t.children_ = (tensor,)
+    return n_t
+
+def sigmoid(tensor: Tensor):
+    n_t = Tensor(1 / (1 + np.exp(tensor.value)), tensor.c_g_)
+    n_t.is_leaf = False
+    if n_t.c_g_:
+        n_t.propagate_ = sigmoid_propagate
+        n_t.children_ = (tensor,)
+    return n_t
 

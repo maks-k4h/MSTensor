@@ -184,15 +184,22 @@ def subtraction_test():
     # we don't check for parents here as it depends on realization
 
     t1 = Tensor(np.array([20]), True)
-    t2 = Tensor(np.array([13]), True)
+    t2 = Tensor(np.array([13]))
     res = t1 - t2
     assert res.value.size == 1
     assert res.value == np.array([[7]])
     assert res.c_g_
     assert not res.grad
-    assert res.children_[0] and res.children_[1]
     res.back_prop()
     assert t1.grad == np.array([[1]])
+
+    t1 = Tensor(np.array([20]))
+    t2 = Tensor(np.array([13]), True)
+    res = t1 - t2
+    assert res.value.size == 1
+    assert res.c_g_
+    assert not res.grad
+    res.back_prop()
     assert t2.grad == np.array([[-1]])
 
     t1 = Tensor(np.array([3]), True)
@@ -283,15 +290,19 @@ def multiplication_test():
     # we don't check for parents here as it depends on realization
 
     t1 = Tensor(np.array([2]), True)
-    t2 = Tensor(np.array([11]), True)
+    t2 = Tensor(np.array([11]))
     res = t1 * t2
     assert res.value.size == 1
     assert res.value == np.array([[22]])
     assert res.c_g_
     assert not res.grad
-    assert len(res.children_) == 2
     res.back_prop()
     assert t1.grad == np.array([[11]])
+
+    t1 = Tensor(np.array([2]))
+    t2 = Tensor(np.array([11]), True)
+    res = t1 * t2
+    res.back_prop()
     assert t2.grad == np.array([[2]])
 
     t1 = Tensor(np.array([1]), True)
@@ -479,7 +490,7 @@ def matmul_test():
     assert (a @ b).c_g_ and (b @ a).c_g_
 
     t1 = Tensor(np.array([5]), True)
-    t2 = Tensor(np.array([3]), True)
+    t2 = Tensor(np.array([3]))
     a = t1 @ t2
     assert a.c_g_ and not a.grad
     assert a.value.size == 1
@@ -488,6 +499,12 @@ def matmul_test():
     a.back_prop()
     assert t1.grad.size == 1 and t1.grad.shape == (1, 1)
     assert t1.grad == np.array([[3]])
+
+    t1 = Tensor(np.array([5]))
+    t2 = Tensor(np.array([3]), True)
+    a = t1 @ t2
+    assert a.value == np.array([[15]])
+    a.back_prop()
     assert t2.grad.size == 1 and t2.grad.shape == (1, 1)
     assert t2.grad == np.array([[5]])
 
@@ -584,13 +601,20 @@ def pow_test():
     assert r.value[0][0] == 25
 
     a = Tensor(np.array([5]), True)
-    b = Tensor(np.array([2]), True)
+    b = Tensor(np.array([2]))
     r = a ** b
     r.back_prop()
     assert a.c_g_
     assert r.value[0][0] == 25
     assert a.grad == 10
-    assert b.grad == 5**2 * math.log(5)
+
+    a = Tensor(np.array([5]))
+    b = Tensor(np.array([2]), True)
+    r = a ** b
+    r.back_prop()
+    assert b.c_g_
+    assert r.value[0][0] == 25
+    assert b.grad == 5 ** 2 * math.log(5)
 
     a = Tensor(np.array([5]), True)
     b = Tensor(np.ones(1), True)
@@ -817,25 +841,25 @@ def exp_test():
     assert a.grad.shape == (1, 1)
     assert r.value - math.exp(5) < 1e-6
     assert r.c_g_
-    assert a.grad[0][0] == math.exp(5)
+    assert a.grad[0][0] - math.exp(5) < 1e-6
 
     a = Tensor(np.array([5, 9]), True)
     r = exp(a).sum()
     r.back_prop()
     assert r.value - math.exp(5) - math.exp(9) < 1e-6
     assert a.grad.shape == (2, 1)
-    assert a.grad[0][0] == math.exp(5)
-    assert a.grad[1][0] == math.exp(9)
+    assert a.grad[0][0] - math.exp(5) < 1e-6
+    assert a.grad[1][0] - math.exp(9) < 1e-6
 
     a = Tensor(np.array([[2, 3], [4, 5]]), True)
     r = exp(a).sum()
     r.back_prop()
     assert r.value - math.exp(2) - math.exp(3) - math.exp(4) - math.exp(5) < 1e-6
     assert a.grad.shape == (2, 2)
-    assert a.grad[0][0] == math.exp(2)
-    assert a.grad[0][1] == math.exp(3)
-    assert a.grad[1][0] == math.exp(4)
-    assert a.grad[1][1] == math.exp(5)
+    assert a.grad[0][0] - math.exp(2) < 1e-6
+    assert a.grad[0][1] - math.exp(3) < 1e-6
+    assert a.grad[1][0] - math.exp(4) < 1e-6
+    assert a.grad[1][1] - math.exp(5) < 1e-6
 
     print('Tensor Exp Function Tests Succeeded')
 
@@ -866,18 +890,18 @@ def sigmoid_test():
     r.back_prop()
     assert r.value - s(5) - s(9) < 1e-6
     assert a.grad.shape == (2, 1)
-    assert a.grad[0][0] == s(5)*(1-s(5))
-    assert a.grad[1][0] == s(9)*(1-s(9))
+    assert a.grad[0][0] - s(5)*(1-s(5)) < 1e-6
+    assert a.grad[1][0] - s(9)*(1-s(9)) < 1e-6
 
     a = Tensor(np.array([[2, 3], [4, 5]]), True)
     r = sigmoid(a).sum()
     r.back_prop()
     assert r.value - s(2) - s(3) - s(4) - s(5) < 1e-6
     assert a.grad.shape == (2, 2)
-    assert a.grad[0][0] == s(2)*(1-s(2))
-    assert a.grad[0][1] == s(3)*(1-s(3))
-    assert a.grad[1][0] == s(4)*(1-s(4))
-    assert a.grad[1][1] == s(5)*(1-s(5))
+    assert a.grad[0][0] - s(2)*(1-s(2)) < 1e-6
+    assert a.grad[0][1] - s(3)*(1-s(3)) < 1e-6
+    assert a.grad[1][0] - s(4)*(1-s(4)) < 1e-6
+    assert a.grad[1][1] - s(5)*(1-s(5)) < 1e-6
 
     print('Tensor Sigmoid Function Tests Succeeded')
 
@@ -927,7 +951,7 @@ sum_test()
 chain_rule_test()
 
 # Helper methods
-# log_test()
-# exp_test()
-# sigmoid_test()
-# ReLU_test()
+log_test()
+exp_test()
+sigmoid_test()
+ReLU_test()
